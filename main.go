@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 
@@ -13,24 +14,26 @@ import (
 func main() {
 	loadPizzas()
 	router := gin.Default()
-	router.GET("/pizzas", getPizzas)
-	router.POST("/pizzas", postPizzas)
-	router.GET("/pizzas/:id", getPizzasById)
+	router.GET("/pizzas", getAllPizzas)
+	router.POST("/pizzas", createPizza)
+	router.GET("/pizzas/:id", getPizza)
+	router.DELETE("/pizzas/:id", deletePizza)
+	router.PUT("/pizzas/:id", updatePizza)
 	router.Run()
 }
 
 var pizzas []models.Pizza
 
-func getPizzas(c *gin.Context) {
-	c.JSON(200, gin.H{
+func getAllPizzas(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
 		"pizzas": pizzas,
 	})
 }
 
-func postPizzas(c *gin.Context) {
+func createPizza(c *gin.Context) {
 	var newPizza models.Pizza
 	if err := c.ShouldBindJSON(&newPizza); err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -38,14 +41,14 @@ func postPizzas(c *gin.Context) {
 	newPizza.ID = len(pizzas) + 1
 	pizzas = append(pizzas, newPizza)
 	savePizzas()
-	c.JSON(201, newPizza)
+	c.JSON(http.StatusCreated, newPizza)
 }
 
-func getPizzasById(c *gin.Context) {
+func getPizza(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
-		c.JSON(400, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -53,12 +56,75 @@ func getPizzasById(c *gin.Context) {
 
 	for _, pizza := range pizzas {
 		if pizza.ID == id {
-			c.JSON(200, gin.H{"pizza": pizza})
+			c.JSON(http.StatusOK, gin.H{"pizza": pizza})
 			return
 		}
 	}
-	c.JSON(404, gin.H{"error": "Pizza not found"})
+	c.JSON(http.StatusNotFound, gin.H{"error": "Pizza not found"})
 
+}
+
+func deletePizza(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	for i, pizza := range pizzas {
+		if pizza.ID == id {
+			pizzas = append(pizzas[:i], pizzas[i+1:]...)
+			savePizzas()
+			c.JSON(http.StatusOK, gin.H{
+				"message": "Successfully deleted",
+			})
+			return
+		}
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{
+		"error": "Not found",
+	})
+}
+
+func updatePizza(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	var updatedPizza models.Pizza
+	err = c.ShouldBindJSON(&updatedPizza)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	for i, pizza := range pizzas {
+		if pizza.ID == id {
+			updatedPizza.ID = id
+			pizzas[i] = updatedPizza
+			savePizzas()
+			c.JSON(http.StatusOK, gin.H{
+				"message": "Successfully updated",
+				"pizza":   updatedPizza,
+			})
+			return
+		}
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{
+		"error": "Not found",
+	})
 }
 
 func loadPizzas() {
